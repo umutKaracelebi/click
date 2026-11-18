@@ -3403,13 +3403,44 @@ class Option(Parameter):
 
     def get_error_hint(self, ctx: Context | None) -> str:
         result = super().get_error_hint(ctx)
-        if self.show_envvar and self.envvar:
-            envvars = [self.envvar] if isinstance(self.envvar, str) else self.envvar
-            # An environment variable is allowed to feature a space or a comma on all
-            # platforms, hence the quotes around each.
-            var_str = ", ".join(f"'{var}'" for var in envvars)
-            result += f" (env var: {var_str})"
+
+        if self.show_envvar:
+            envvars = self._get_shown_envvars(ctx)
+
+            if envvars:
+                # An environment variable is allowed to feature a space or a comma
+                # on all platforms, hence the quotes around each.
+                var_str = ", ".join(f"'{var}'" for var in envvars)
+                result += f" (env var: {var_str})"
+
         return result
+
+    def _get_shown_envvars(self, ctx: Context | None) -> tuple[str, ...]:
+        """The environment variable names to show for this option.
+
+        Mirrors :meth:`resolve_envvar_value`, including the name derived from
+        :attr:`Context.auto_envvar_prefix`.
+
+        :meta private:
+        """
+        envvar = self.envvar
+
+        if (
+            not envvar
+            and ctx is not None
+            and self.allow_from_autoenv
+            and ctx.auto_envvar_prefix is not None
+            and self.name
+        ):
+            envvar = f"{ctx.auto_envvar_prefix}_{self.name.upper()}"
+
+        if not envvar:
+            return ()
+
+        if isinstance(envvar, str):
+            return (envvar,)
+
+        return tuple(str(d) for d in envvar)
 
     def _check_name_is_normalized(self, name: str, decls: cabc.Sequence[str]) -> None:
         """Warn about an explicit name Click 9.0 will spell differently.
@@ -3600,20 +3631,10 @@ class Option(Parameter):
         extra: types.OptionHelpExtra = {}
 
         if self.show_envvar:
-            envvar = self.envvar
+            envvars = self._get_shown_envvars(ctx)
 
-            if not envvar and (
-                self.allow_from_autoenv
-                and ctx.auto_envvar_prefix is not None
-                and self.name
-            ):
-                envvar = f"{ctx.auto_envvar_prefix}_{self.name.upper()}"
-
-            if envvar:
-                if isinstance(envvar, str):
-                    extra["envvars"] = (envvar,)
-                else:
-                    extra["envvars"] = tuple(str(d) for d in envvar)
+            if envvars:
+                extra["envvars"] = envvars
 
         # Temporarily enable resilient parsing to avoid type casting
         # failing for the default. Might be possible to extend this to

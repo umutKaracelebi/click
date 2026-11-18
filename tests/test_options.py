@@ -1180,6 +1180,46 @@ def test_missing_envvar(runner):
     assert "Error: Missing option '--foo'." in result.output
 
 
+def test_missing_envvar_auto_envvar_prefix(runner):
+    """The error hint shows the variable derived from ``auto_envvar_prefix``."""
+    cli = click.Command(
+        "cli",
+        context_settings={"auto_envvar_prefix": "MYAPP"},
+        params=[click.Option(["--port"], show_envvar=True, required=True)],
+    )
+    result = runner.invoke(cli)
+    assert result.exit_code == 2
+    assert "Error: Missing option '--port' (env var: 'MYAPP_PORT')." in result.output
+
+    # An explicit ``envvar`` takes precedence over the derived name.
+    cli = click.Command(
+        "cli",
+        context_settings={"auto_envvar_prefix": "MYAPP"},
+        params=[
+            click.Option(
+                ["--port"], envvar="OTHER_PORT", show_envvar=True, required=True
+            )
+        ],
+    )
+    result = runner.invoke(cli)
+    assert result.exit_code == 2
+    assert "Error: Missing option '--port' (env var: 'OTHER_PORT')." in result.output
+
+    # Disabled automatic lookup means there is no derived name to show.
+    cli = click.Command(
+        "cli",
+        context_settings={"auto_envvar_prefix": "MYAPP"},
+        params=[
+            click.Option(
+                ["--port"], show_envvar=True, required=True, allow_from_autoenv=False
+            )
+        ],
+    )
+    result = runner.invoke(cli)
+    assert result.exit_code == 2
+    assert "Error: Missing option '--port'." in result.output
+
+
 @pytest.mark.parametrize(
     ("envvar", "expected"),
     [
