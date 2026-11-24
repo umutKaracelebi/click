@@ -1180,6 +1180,20 @@ def test_missing_envvar(runner):
     assert "Error: Missing option '--foo'." in result.output
 
 
+def test_missing_envvar_auto_prefix(runner):
+    """The hint names the variable built from ``auto_envvar_prefix``.
+
+    The help page already shows it, error messages should match.
+    """
+    option = click.Option(["--foo-bar"], show_envvar=True, required=True)
+    result = runner.invoke(
+        click.Command("cli", params=[option]), auto_envvar_prefix="MYAPP"
+    )
+    assert result.exit_code == 2
+    expected = "Error: Missing option '--foo-bar' (env var: 'MYAPP_FOO_BAR')."
+    assert expected in result.output
+
+
 @pytest.mark.parametrize(
     ("envvar", "expected"),
     [

@@ -193,7 +193,10 @@ For single option boolean flags, the default remains hidden if the default value
 
 ## Showing Environment Variables
 
-To control the appearance of environment variables pass `show_envvar`.
+To control the appearance of environment variables pass `show_envvar`. The
+variable is named on the help page, and in the error message for a missing or
+invalid value. If the option does not set `envvar`, the name is derived from
+{attr}`Context.auto_envvar_prefix`.
 
 ```{eval-rst}
 .. click:example::

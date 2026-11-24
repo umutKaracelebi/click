@@ -3084,6 +3084,11 @@ class Option(Parameter):
     :param hidden: hide this option from help outputs.
     :param attrs: Other command arguments described in :class:`Parameter`.
 
+    .. versionchanged:: 8.6.0
+        An error message names the environment variable derived from
+        ``Context.auto_envvar_prefix`` when ``show_envvar`` is enabled, the
+        same way the help page does.
+
     .. versionchanged:: 8.4.0
         Non-basic ``flag_value`` types (not ``str``, ``int``, ``float``, or
         ``bool``) are passed through unchanged instead of being stringified.
@@ -3401,14 +3406,43 @@ class Option(Parameter):
             value = value()
         return value
 
+    def _get_envvars(self, ctx: Context | None) -> tuple[str, ...]:
+        """Return the environment variables that may provide a value.
+
+        This is :attr:`envvar` when it is set, otherwise the name built from
+        :attr:`Context.auto_envvar_prefix` in the same way as
+        :meth:`resolve_envvar_value`.
+        """
+        envvar = self.envvar
+
+        if not envvar and (
+            ctx is not None
+            and self.allow_from_autoenv
+            and ctx.auto_envvar_prefix is not None
+            and self.name
+        ):
+            envvar = f"{ctx.auto_envvar_prefix}_{self.name.upper()}"
+
+        if not envvar:
+            return ()
+
+        if isinstance(envvar, str):
+            return (envvar,)
+
+        return tuple(str(var) for var in envvar)
+
     def get_error_hint(self, ctx: Context | None) -> str:
         result = super().get_error_hint(ctx)
-        if self.show_envvar and self.envvar:
-            envvars = [self.envvar] if isinstance(self.envvar, str) else self.envvar
-            # An environment variable is allowed to feature a space or a comma on all
-            # platforms, hence the quotes around each.
-            var_str = ", ".join(f"'{var}'" for var in envvars)
-            result += f" (env var: {var_str})"
+
+        if self.show_envvar:
+            envvars = self._get_envvars(ctx)
+
+            if envvars:
+                # An environment variable is allowed to feature a space or a comma on
+                # all platforms, hence the quotes around each.
+                var_str = ", ".join(f"'{var}'" for var in envvars)
+                result += f" (env var: {var_str})"
+
         return result
 
     def _check_name_is_normalized(self, name: str, decls: cabc.Sequence[str]) -> None:
@@ -3600,20 +3634,10 @@ class Option(Parameter):
         extra: types.OptionHelpExtra = {}
 
         if self.show_envvar:
-            envvar = self.envvar
+            envvars = self._get_envvars(ctx)
 
-            if not envvar and (
-                self.allow_from_autoenv
-                and ctx.auto_envvar_prefix is not None
-                and self.name
-            ):
-                envvar = f"{ctx.auto_envvar_prefix}_{self.name.upper()}"
-
-            if envvar:
-                if isinstance(envvar, str):
-                    extra["envvars"] = (envvar,)
-                else:
-                    extra["envvars"] = tuple(str(d) for d in envvar)
+            if envvars:
+                extra["envvars"] = envvars
 
         # Temporarily enable resilient parsing to avoid type casting
         # failing for the default. Might be possible to extend this to
